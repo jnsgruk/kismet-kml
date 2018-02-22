@@ -55,7 +55,12 @@ class KMLGen():
     for client in row_clients:
       fetched = list(filter(lambda x: x["Key"] == row_clients[client], self.clients))
       fields["Clients"] = fetched
-    print(fields["Clients"])
+
+    # 
+    # 
+    # CHECK THE CLIENTS SECTION ABOVE WORKS
+    # 
+    # 
       
     #  Add fields["Locations"] and capture all location instances
     return fields
@@ -81,6 +86,11 @@ class KMLGen():
     #  Add fields["Locations"] and capture all location instances
     return fields
 
+  # 
+  # 
+  #  CHECK THIS WORKS
+  # 
+  # 
   def parseOther(self, row):
     fields = {}
     device_json = json.loads(row["device"])
@@ -96,7 +106,11 @@ class KMLGen():
 
     #  Add fields["Locations"] and capture all location instances
     return fields
-
+  # 
+  # 
+  #  CHECK THIS WORKS
+  # 
+  # 
   def parseData(self):
     clients = list(filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
     aps = list(filter(lambda x: x["type"] == "Wi-Fi AP", self.rows))
@@ -142,6 +156,11 @@ class KMLGen():
           KML.Point(KML.coordinates(row["avg_lon"]/100000,",",row["avg_lat"]/100000)),
           KML.ExtendedData(
             KML.Data(KML.value(row["devmac"], name="Device MAC"))
+            # 
+            # 
+            # LOOP OVER ATTRIBUTES HERE
+            # 
+            # 
           )
         )
         document.Document.append(pm)
