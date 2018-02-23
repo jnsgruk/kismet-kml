@@ -33,8 +33,17 @@ class KMLGen():
     c.execute("SELECT * FROM devices")
     self.rows = c.fetchall()
     c.close()
+ 
+  def parseData(self):
+    clients = list(filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
+    aps = list(filter(lambda x: x["type"] == "Wi-Fi AP", self.rows))
+    bridged = list(filter(lambda x: x["type"] == "Wi-Fi Bridged", self.rows))
+    other = list(filter(lambda x: x["type"] not in ["Wi-Fi Client","Wi-Fi AP""Wi-Fi Bridged"], self.rows))
 
-  # ['first_time', 'last_time', 'phyname', 'devmac', 'strongest_signal', 'min_lat', 'min_lon', 'max_lat', 'max_lon', 'avg_lat', 'avg_lon', 'bytes_data', 'type', 'device']
+    self.clients = list(map(lambda x: self.parseClient(x), clients))
+    self.aps = list(map(lambda x: self.parseAP(x), aps))
+    self.bridged = list(map(lambda x: self.parseOther(x), bridged))
+    self.other = list(map(lambda x: self.parseOther(x), other))
 
   def parseAP(self, row):
     fields = {}
@@ -50,18 +59,18 @@ class KMLGen():
     fields["Key"] = device_json["kismet.device.base.key"]
     fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
 
-    fields["Clients"] = []
+    # Populate an array of client objects
     row_clients = device_json["dot11.device"]["dot11.device.associated_client_map"]
-    for client in row_clients:
-      fetched = list(filter(lambda x: x["Key"] == row_clients[client], self.clients))
-      fields["Clients"] = fetched
+    fields["Clients"] = [{k:v} for k,v in row_clients.items()]
 
-    # 
-    # 
-    # CHECK THE CLIENTS SECTION ABOVE WORKS
-    # 
-    # 
-      
+    for i, client in enumerate(fields["Clients"]):
+      key = list(client.values())[0]
+      matched = list(filter(lambda c: key == c["Key"] ,self.clients))
+      if len(matched) > 0:
+        fields["Clients"][i] = matched[0]
+      else:
+        fields["Clients"][i] = { "Key": key, "Device MAC": list(client.keys())[0]}
+    
     #  Add fields["Locations"] and capture all location instances
     return fields
 
@@ -86,11 +95,7 @@ class KMLGen():
     #  Add fields["Locations"] and capture all location instances
     return fields
 
-  # 
-  # 
-  #  CHECK THIS WORKS
-  # 
-  # 
+
   def parseOther(self, row):
     fields = {}
     device_json = json.loads(row["device"])
@@ -106,28 +111,6 @@ class KMLGen():
 
     #  Add fields["Locations"] and capture all location instances
     return fields
-  # 
-  # 
-  #  CHECK THIS WORKS
-  # 
-  # 
-  def parseData(self):
-    clients = list(filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
-    aps = list(filter(lambda x: x["type"] == "Wi-Fi AP", self.rows))
-    bridged = list(filter(lambda x: x["type"] == "Wi-Fi Bridged", self.rows))
-    other = list(filter(lambda x: x["type"] not in ["Wi-Fi Client","Wi-Fi AP""Wi-Fi Bridged"], self.rows))
-
-    self.clients = list(map(lambda x: self.parseClient(x), clients))
-    self.aps = list(map(lambda x: self.parseAP(x), aps))
-    self.bridged = list(map(lambda x: self.parseOther(x), bridged))
-    self.other = list(map(lambda x: self.parseOther(x), other))
-    # print(json.dumps(self.clients))
-    # print()
-    # print(json.dumps(self.aps))
-    # print()
-    # print(json.dumps(self.bridged))
-    # print()
-    # print(json.dumps(self.other))
 
   def createKML(self):
     try:
