@@ -11,29 +11,33 @@ class KMLGen():
     self.inputFile = inputFile
     self.outputFile = outputFile
     self.jsonFile = jsonFile
-
+    # Initialize variables
     self.rows = []
-
     self.clients = []
     self.aps = []
     self.bridged = []
     self.other = []
+    self.probes = set([])
 
+    #  Load data from the database file passed in
     self.getData()
+    #  Parse the data, sorting into aps, bridged, clients, other
     self.parseData()
+    #  Take the parsed data and generate a KML
     self.createKML()
 
-    jsonOut = {
+    # Write the sorted data into a nicely formatted JSON file
+    output = open(self.jsonFile, "w")
+    output.write(json.dumps({
       "clients": self.clients,
       "aps": self.aps,
       "bridged": self.bridged,
-      "other": self.other
-    }
-
-    output = open(self.jsonFile, "w")
-    output.write(json.dumps(jsonOut, indent=2))
+      "other": self.other,
+      "probes": list(self.probes)
+    }, indent=2))
     output.close()
     
+  # Connects to the Kismet database file and pulls the rows from the devices table
   def getData(self):
     conn = sqlite3.connect(self.inputFile)
     conn.row_factory = sqlite3.Row
@@ -41,18 +45,23 @@ class KMLGen():
     c.execute("SELECT * FROM devices")
     self.rows = c.fetchall()
     c.close()
- 
+  
+  # Process the collected data
   def parseData(self):
+    #  Filter the data into lists based on type
     clients = list(filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
     aps = list(filter(lambda x: x["type"] == "Wi-Fi AP", self.rows))
     bridged = list(filter(lambda x: x["type"] == "Wi-Fi Bridged", self.rows))
     other = list(filter(lambda x: x["type"] not in ["Wi-Fi Client","Wi-Fi AP","Wi-Fi Bridged"], self.rows))
 
+    #  Parse every item, placing the result into an approriate list
     self.clients = list(map(lambda x: self.parseClient(x), clients))
     self.aps = list(map(lambda x: self.parseAP(x), aps))
     self.bridged = list(map(lambda x: self.parseOther(x), bridged))
     self.other = list(map(lambda x: self.parseOther(x), other))
 
+  #  Fetches every location a device was seen, and works out Lat/Lon based on position when
+  #  signal strength was highest
   def getLocationData(self, device_json):
     fields = {}
     fields["Locations"] = []
@@ -75,6 +84,7 @@ class KMLGen():
       fields["Longitude"] = 0
     return fields
 
+  # Returns all the fields common to every device type
   def getCommonFields(self, row, device_json):
     fields = {}
     fields["Type"] = row["type"]
@@ -86,6 +96,7 @@ class KMLGen():
     fields["Key"] = device_json["kismet.device.base.key"]
     return fields
 
+  # For a given client, find any APs it's associated with
   def getClientAPs(self,device_json):
     fields = {}
     clientMap = device_json["dot11.device"]["dot11.device.client_map"]
@@ -98,30 +109,37 @@ class KMLGen():
         })
     return fields
 
+  #  For a given device, find any probes it may have sent out
   def getProbes(self, device_json):
     fields = {}
     fields["Probes"] = []
     row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
     for probe in row_probes:
       if row_probes[probe]["dot11.probedssid.ssid"]:
-        fields["Probes"].append({"SSID": row_probes[probe]["dot11.probedssid.ssid"]})
+        ssid = row_probes[probe]["dot11.probedssid.ssid"]
+        fields["Probes"].append({"SSID": ssid})
+        self.probes.add(ssid)
     return fields
 
+  #  Parse an AP object, creating necesarry common keys, and populate with client macs/uuids
   def parseAP(self, row):
     fields = {}
     device_json = json.loads(row["device"])
-    print(json.dumps(device_json, indent=2))
+    # Get common fields and location data
     fields.update(self.getCommonFields(row, device_json))
     fields.update(self.getLocationData(device_json))
-    
+      
+    # Populate the SSID field
     fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
 
     # Populate an array of client objects
     row_clients = device_json["dot11.device"]["dot11.device.associated_client_map"]
     fields["Clients"] = [{k:v} for k,v in row_clients.items()]
 
+    # Iterate over the clients, adding their MACs and UUIDs
     for i, client in enumerate(fields["Clients"]):
       key = list(client.values())[0]
+      # Filter the client list to get all clients matching the Key
       matched = list(filter(lambda c: key == c["Key"] ,self.clients))
       if len(matched) > 0:
         # fields["Clients"][i] = matched[0]
