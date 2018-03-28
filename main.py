@@ -12,8 +12,6 @@ class KMLGen():
     self.outputFile = outputFile
     self.jsonFile = jsonFile
 
-    self.debug = True 
-    
     self.rows = []
 
     self.clients = []
@@ -23,7 +21,6 @@ class KMLGen():
 
     self.getData()
     self.parseData()
-   
     self.createKML()
 
     jsonOut = {
@@ -49,25 +46,50 @@ class KMLGen():
     clients = list(filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
     aps = list(filter(lambda x: x["type"] == "Wi-Fi AP", self.rows))
     bridged = list(filter(lambda x: x["type"] == "Wi-Fi Bridged", self.rows))
-    other = list(filter(lambda x: x["type"] not in ["Wi-Fi Client","Wi-Fi AP""Wi-Fi Bridged"], self.rows))
+    other = list(filter(lambda x: x["type"] not in ["Wi-Fi Client","Wi-Fi AP","Wi-Fi Bridged"], self.rows))
 
     self.clients = list(map(lambda x: self.parseClient(x), clients))
     self.aps = list(map(lambda x: self.parseAP(x), aps))
     self.bridged = list(map(lambda x: self.parseOther(x), bridged))
     self.other = list(map(lambda x: self.parseOther(x), other))
 
-  def parseAP(self, row):
+  def getLocationData(self, locations):
     fields = {}
-    device_json = json.loads(row["device"])
+    fields["Locations"] = []
+    if type(locations) is dict:
+      maxdBm = -1000
+      for loc in locations["kis.gps.rrd.samples_100"]:
+          outputLoc = {
+              "Latitude": loc["kismet.historic.location.lat"],
+              "Longitude": loc["kismet.historic.location.lon"],
+              "dBm": loc["kismet.historic.location.signal"]
+          }
+          fields["Locations"].append(outputLoc)
+          if outputLoc["dBm"] > maxdBm: 
+            fields["Latitude"] = outputLoc["Latitude"]
+            fields["Longitude"] = outputLoc["Longitude"]
+            maxdBm = outputLoc["dBm"]
+    else:
+      fields["Latitude"] = 0
+      fields["Longitude"] = 0
+    return fields
+
+  def getCommonFields(self, row, device_json):
+    fields = {}
     fields["Type"] = row["type"]
-    fields["Average Longitude"] = row["avg_lon"]/100000
-    fields["Average Latitude"] = row["avg_lat"]/100000
     fields["First Seen"] = str(datetime.fromtimestamp(row["first_time"]))
     fields["Last Seen"] = str(datetime.fromtimestamp(row["last_time"]))
     fields["Device MAC"] = row["devmac"]
     fields["Common Name"] = device_json["kismet.device.base.commonname"]
     fields["Channel"] = device_json["kismet.device.base.channel"]
     fields["Key"] = device_json["kismet.device.base.key"]
+    return fields
+
+  def parseAP(self, row):
+    fields = {}
+    device_json = json.loads(row["device"])
+    fields.update(self.getCommonFields(row, device_json))
+    
     fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
 
     # Populate an array of client objects
@@ -78,50 +100,57 @@ class KMLGen():
       key = list(client.values())[0]
       matched = list(filter(lambda c: key == c["Key"] ,self.clients))
       if len(matched) > 0:
-        fields["Clients"][i] = matched[0]
+        # fields["Clients"][i] = matched[0]
+        matchedClient = matched[0]
+        fields["Clients"][i] = { "Key": key, "Device MAC": matchedClient["Device MAC"]}
       else:
         fields["Clients"][i] = { "Key": key, "Device MAC": list(client.keys())[0]}
     
-    #  Add fields["Locations"] and capture all location instances
+    fields.update(self.getLocationData(device_json["kismet.device.base.location_cloud"]))
+
+
     return fields
 
   def parseClient(self, row):
     fields = {}
     device_json = json.loads(row["device"])
-    fields["Type"] = row["type"]
-    fields["Average Longitude"] = row["avg_lon"]/100000
-    fields["Average Latitude"] = row["avg_lat"]/100000
-    fields["First Seen"] = str(datetime.fromtimestamp(row["first_time"]))
-    fields["Last Seen"] = str(datetime.fromtimestamp(row["last_time"]))
-    fields["Device MAC"] = row["devmac"]
-    fields["Common Name"] = device_json["kismet.device.base.commonname"]
-    fields["Channel"] = device_json["kismet.device.base.channel"]
-    fields["Key"] = device_json["kismet.device.base.key"]
+    fields.update(self.getCommonFields(row, device_json))
 
     fields["Probes"] = []
     row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
     for probe in row_probes:
       if row_probes[probe]["dot11.probedssid.ssid"]:
         fields["Probes"].append({"SSID": row_probes[probe]["dot11.probedssid.ssid"]})
-    #  Add fields["Locations"] and capture all location instances
+    
+    fields.update(self.getLocationData(device_json["kismet.device.base.location_cloud"]))
+    
     return fields
 
 
   def parseOther(self, row):
     fields = {}
     device_json = json.loads(row["device"])
-    fields["Type"] = row["type"]
-    fields["Average Longitude"] = row["avg_lon"]/100000
-    fields["Average Latitude"] = row["avg_lat"]/100000
-    fields["First Seen"] = str(datetime.fromtimestamp(row["first_time"]))
-    fields["Last Seen"] = str(datetime.fromtimestamp(row["last_time"]))
-    fields["Device MAC"] = row["devmac"]
-    fields["Common Name"] = device_json["kismet.device.base.commonname"]
-    fields["Channel"] = device_json["kismet.device.base.channel"]
-    fields["Key"] = device_json["kismet.device.base.key"]
+    fields.update(self.getCommonFields(row, device_json))
 
-    #  Add fields["Locations"] and capture all location instances
+    fields.update(self.getLocationData(device_json["kismet.device.base.location_cloud"]))
+
     return fields
+
+  def getCommonExtendedData(self, object):
+    return KML.ExtendedData(
+          KML.Data(KML.value(object["Device MAC"]), name="Device MAC"),
+          KML.Data(KML.value(object["Type"]), name="Type"),
+          KML.Data(KML.value(object["First Seen"]), name="First Seen"),
+          KML.Data(KML.value(object["Last Seen"]), name="Last Seen"),
+          KML.Data(KML.value(object["Channel"]), name="Channel")
+    )
+
+  def getPlacemark(self, object, style):
+    return KML.Placemark(
+          KML.name(object["Common Name"]),
+          KML.styleUrl(style),
+          KML.Point(KML.coordinates(object["Longitude"],",",object["Latitude"])),
+        )
 
   def createKML(self):
     try:
@@ -131,85 +160,44 @@ class KMLGen():
       document.Document.append(KML.Style(KML.IconStyle(KML.scale(1.0), KML.color('50B41E14'), KML.Icon(KML.href("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"),), id="blue_circle"), id="blue_circle"))
       document.Document.append(KML.Style(KML.IconStyle(KML.scale(1.0), KML.color('ff00C2ff'), KML.Icon(KML.href("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"),), id="amber_circle"), id="amber_circle"))
       document.Document.append(KML.Style(KML.IconStyle(KML.scale(1.0), KML.color('ff00ff00'), KML.Icon(KML.href("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"),), id="green_circle"), id="green_circle"))
+      document.Document.append(KML.Style(KML.IconStyle(KML.scale(1.0), KML.color('501400FF'), KML.Icon(KML.href("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"),), id="red_circle"), id="red_circle"))
 
       for client in self.clients:
-        style = "#blue_circle"
-        pm = KML.Placemark(
-          KML.name(client["Common Name"]),
-          KML.styleUrl(style),
-          KML.Point(KML.coordinates(client["Average Longitude"],",",client["Average Latitude"])),
-        )
-        
-        extData = KML.ExtendedData(
-          KML.Data(KML.value(client["Device MAC"], name="Device MAC")),
-          KML.Data(KML.value(client["First Seen"], name="First Seen")),
-          KML.Data(KML.value(client["Last Seen"], name="Last Seen")),
-          KML.Data(KML.value(client["Channel"], name="Channel"))
-        )
-          
-        for probe in client["Probes"]:
-          extData.append(KML.Data(KML.value(probe["SSID"], name="Probed SSID")))
+        if client["Locations"]:
+          pm = self.getPlacemark(client, "#blue_circle")
+          extData = self.getCommonExtendedData(client)
+            
+          for probe in client["Probes"]:
+            extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
 
-        pm.append(extData)
-        document.Document.append(pm)
+          pm.append(extData)
+          document.Document.append(pm)
 
       for ap in self.aps:
-        style = "#green_circle"
-        pm = KML.Placemark(
-          KML.name(ap["Common Name"]),
-          KML.styleUrl(style),
-          KML.Point(KML.coordinates(ap["Average Longitude"],",",ap["Average Latitude"])),
-        )
-        
-        extData = KML.ExtendedData(
-          KML.Data(KML.value(ap["Device MAC"], name="Device MAC")),
-          KML.Data(KML.value(ap["First Seen"], name="First Seen")),
-          KML.Data(KML.value(ap["Last Seen"], name="Last Seen")),
-          KML.Data(KML.value(ap["Channel"], name="Channel")),
-          KML.Data(KML.value(ap["SSID"], name="SSID"))
-        )
-          
-        for client in ap["Clients"]:
-          extData.append(KML.Data(KML.value(client["Device MAC"], name="Client Device MAC")))
+        if ap["Locations"]:
+          pm = self.getPlacemark(ap, "#green_circle")
+          extData = self.getCommonExtendedData(ap)
+          extData.append(KML.Data(KML.value(ap["SSID"]), name="SSID"))
+            
+          for client in ap["Clients"]:
+            extData.append(KML.Data(KML.value(client["Device MAC"]), name="Client Device MAC"))
 
-        pm.append(extData)
-        document.Document.append(pm)
-
+          pm.append(extData)
+          document.Document.append(pm)
+      
       for other in self.other:
-        style = "#amber_circle"
-        pm = KML.Placemark(
-          KML.name(other["Common Name"]),
-          KML.styleUrl(style),
-          KML.Point(KML.coordinates(other["Average Longitude"],",",other["Average Latitude"])),
-        )
-        
-        extData = KML.ExtendedData(
-          KML.Data(KML.value(other["Device MAC"], name="Device MAC")),
-          KML.Data(KML.value(other["First Seen"], name="First Seen")),
-          KML.Data(KML.value(other["Last Seen"], name="Last Seen")),
-          KML.Data(KML.value(other["Channel"], name="Channel"))
-        )
-
-        pm.append(extData)
-        document.Document.append(pm)
+        if other["Locations"]:
+          pm = self.getPlacemark(other, "#red_circle")
+          extData = self.getCommonExtendedData(other)
+          pm.append(extData)
+          document.Document.append(pm)
 
       for bridged in self.bridged:
-        style = "#amber_circle"
-        pm = KML.Placemark(
-          KML.name(bridged["Common Name"]),
-          KML.styleUrl(style),
-          KML.Point(KML.coordinates(bridged["Average Longitude"],",",bridged["Average Latitude"])),
-        )
-        
-        extData = KML.ExtendedData(
-          KML.Data(KML.value(bridged["Device MAC"], name="Device MAC")),
-          KML.Data(KML.value(bridged["First Seen"], name="First Seen")),
-          KML.Data(KML.value(bridged["Last Seen"], name="Last Seen")),
-          KML.Data(KML.value(bridged["Channel"], name="Channel"))
-        )
-
-        pm.append(extData)
-        document.Document.append(pm)
+        if bridged["Locations"]:
+          pm = self.getPlacemark(bridged, "#amber_circle")
+          extData = self.getCommonExtendedData(bridged)
+          pm.append(extData)
+          document.Document.append(pm)
 
       output = open(self.outputFile, "w")
       output.write(etree.tostring(document, pretty_print=True).decode())
