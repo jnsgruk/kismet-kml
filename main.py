@@ -31,7 +31,7 @@ class KMLGen():
     }
 
     output = open(self.jsonFile, "w")
-    output.write(json.dumps(jsonOut))
+    output.write(json.dumps(jsonOut, indent=2))
     output.close()
     
   def getData(self):
@@ -53,9 +53,10 @@ class KMLGen():
     self.bridged = list(map(lambda x: self.parseOther(x), bridged))
     self.other = list(map(lambda x: self.parseOther(x), other))
 
-  def getLocationData(self, locations):
+  def getLocationData(self, device_json):
     fields = {}
     fields["Locations"] = []
+    locations = device_json["kismet.device.base.location_cloud"]
     if type(locations) is dict:
       maxdBm = -1000
       for loc in locations["kis.gps.rrd.samples_100"]:
@@ -85,10 +86,33 @@ class KMLGen():
     fields["Key"] = device_json["kismet.device.base.key"]
     return fields
 
+  def getClientAPs(self,device_json):
+    fields = {}
+    clientMap = device_json["dot11.device"]["dot11.device.client_map"]
+    fields["APs"] = []
+    if clientMap:
+      for ap in clientMap:
+        fields["APs"].append({
+          "Key": clientMap[ap]["dot11.client.bssid_key"],
+          "BSSID": clientMap[ap]["dot11.client.bssid"]
+        })
+    return fields
+
+  def getProbes(self, device_json):
+    fields = {}
+    fields["Probes"] = []
+    row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
+    for probe in row_probes:
+      if row_probes[probe]["dot11.probedssid.ssid"]:
+        fields["Probes"].append({"SSID": row_probes[probe]["dot11.probedssid.ssid"]})
+    return fields
+
   def parseAP(self, row):
     fields = {}
     device_json = json.loads(row["device"])
+    print(json.dumps(device_json, indent=2))
     fields.update(self.getCommonFields(row, device_json))
+    fields.update(self.getLocationData(device_json))
     
     fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
 
@@ -105,35 +129,24 @@ class KMLGen():
         fields["Clients"][i] = { "Key": key, "Device MAC": matchedClient["Device MAC"]}
       else:
         fields["Clients"][i] = { "Key": key, "Device MAC": list(client.keys())[0]}
-    
-    fields.update(self.getLocationData(device_json["kismet.device.base.location_cloud"]))
-
-
     return fields
 
   def parseClient(self, row):
     fields = {}
     device_json = json.loads(row["device"])
     fields.update(self.getCommonFields(row, device_json))
-
-    fields["Probes"] = []
-    row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
-    for probe in row_probes:
-      if row_probes[probe]["dot11.probedssid.ssid"]:
-        fields["Probes"].append({"SSID": row_probes[probe]["dot11.probedssid.ssid"]})
-    
-    fields.update(self.getLocationData(device_json["kismet.device.base.location_cloud"]))
-    
+    fields.update(self.getLocationData(device_json))
+    fields.update(self.getClientAPs(device_json))
+    fields.update(self.getProbes(device_json))
     return fields
-
 
   def parseOther(self, row):
     fields = {}
     device_json = json.loads(row["device"])
     fields.update(self.getCommonFields(row, device_json))
-
-    fields.update(self.getLocationData(device_json["kismet.device.base.location_cloud"]))
-
+    fields.update(self.getLocationData(device_json))
+    fields.update(self.getClientAPs(device_json))
+    fields.update(self.getProbes(device_json))
     return fields
 
   def getCommonExtendedData(self, object):
@@ -170,6 +183,11 @@ class KMLGen():
           for probe in client["Probes"]:
             extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
 
+          for i, ap in enumerate(client["APs"]):
+            ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
+            extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
+
           pm.append(extData)
           document.Document.append(pm)
 
@@ -189,6 +207,15 @@ class KMLGen():
         if other["Locations"]:
           pm = self.getPlacemark(other, "#red_circle")
           extData = self.getCommonExtendedData(other)
+
+          for probe in other["Probes"]:
+            extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
+
+          for i, ap in enumerate(other["APs"]):
+            ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
+            extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
+
           pm.append(extData)
           document.Document.append(pm)
 
@@ -196,6 +223,15 @@ class KMLGen():
         if bridged["Locations"]:
           pm = self.getPlacemark(bridged, "#amber_circle")
           extData = self.getCommonExtendedData(bridged)
+
+          for probe in bridged["Probes"]:
+            extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
+
+          for i, ap in enumerate(bridged["APs"]):
+            ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
+            extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
+
           pm.append(extData)
           document.Document.append(pm)
 
