@@ -193,6 +193,11 @@ class KMLGen():
       document.Document.append(KML.Style(KML.IconStyle(KML.scale(1.0), KML.color('ff00ff00'), KML.Icon(KML.href("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"),), id="green_circle"), id="green_circle"))
       document.Document.append(KML.Style(KML.IconStyle(KML.scale(1.0), KML.color('501400FF'), KML.Icon(KML.href("http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"),), id="red_circle"), id="red_circle"))
 
+      kmlClients = KML.Folder(KML.name("Clients"))
+      kmlAPs = KML.Folder(KML.name("APs"))
+      kmlBridged = KML.Folder(KML.name("Bridged"))
+      kmlOther = KML.Folder(KML.name("Other"))
+
       for client in self.clients:
         if client["Locations"]:
           pm = self.getPlacemark(client, "#blue_circle")
@@ -207,7 +212,8 @@ class KMLGen():
             extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
 
           pm.append(extData)
-          document.Document.append(pm)
+          kmlClients.append(pm)
+          # document.Document.append(pm)
 
       for ap in self.aps:
         if ap["Locations"]:
@@ -219,7 +225,8 @@ class KMLGen():
             extData.append(KML.Data(KML.value(client["Device MAC"]), name="Client Device MAC"))
 
           pm.append(extData)
-          document.Document.append(pm)
+          # document.Document.append(pm)
+          kmlAPs.append(pm)
       
       for other in self.other:
         if other["Locations"]:
@@ -235,7 +242,11 @@ class KMLGen():
             extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
 
           pm.append(extData)
-          document.Document.append(pm)
+          # document.Document.append(pm)
+          if other["APs"]:
+            kmlClients.append(pm)
+          else:
+            kmlOther.append(pm)
 
       for bridged in self.bridged:
         if bridged["Locations"]:
@@ -251,7 +262,16 @@ class KMLGen():
             extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
 
           pm.append(extData)
-          document.Document.append(pm)
+          # document.Document.append(pm)
+          if bridged["APs"]:
+            kmlClients.append(pm)
+          else:
+            kmlBridged.append(pm)
+
+      document.Document.append(kmlAPs)
+      document.Document.append(kmlClients)
+      document.Document.append(kmlBridged)
+      document.Document.append(kmlOther)
 
       output = open(self.outputFile, "w")
       output.write(etree.tostring(document, pretty_print=True).decode())
