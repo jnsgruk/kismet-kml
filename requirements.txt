@@ -1,2 +1,2 @@
-lxml==4.1.1
-pykml==0.1.3
+lxml==4.2.1
+-e git+git://github.com/jonseager/pykml.git@master#egg=pykml
