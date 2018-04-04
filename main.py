@@ -207,8 +207,10 @@ class KMLGen():
             extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
 
           for i, ap in enumerate(client["APs"]):
-            ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
-            extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            clist = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))
+            if len(clist) > 0:
+              ssid = clist[0]["SSID"]
+              extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
             extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
 
           pm.append(extData)
@@ -237,8 +239,13 @@ class KMLGen():
             extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
 
           for i, ap in enumerate(other["APs"]):
-            ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
-            extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            olist = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))
+            if len(olist) > 0:
+              ssid = olist[0]["SSID"]
+              extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            
+            # ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
+            # extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
             extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
 
           pm.append(extData)
@@ -257,8 +264,12 @@ class KMLGen():
             extData.append(KML.Data(KML.value(probe["SSID"]), name="Probed SSID"))
 
           for i, ap in enumerate(bridged["APs"]):
-            ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
-            extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            blist = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))
+            if len(blist) > 0:
+              ssid = blist[0]["SSID"]
+              extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
+            # ssid = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))[0]["SSID"]
+            # extData.append(KML.Data(KML.value(ssid), name="AP " + str(i) + " SSID"))
             extData.append(KML.Data(KML.value(ap["BSSID"]), name="AP " + str(i) + " BSSID"))
 
           pm.append(extData)
