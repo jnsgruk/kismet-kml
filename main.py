@@ -65,7 +65,11 @@ class KMLGen():
   def getLocationData(self, device_json):
     fields = {}
     fields["Locations"] = []
-    locations = device_json["kismet.device.base.location_cloud"]
+    if "kismet.device.base.location_cloud" in device_json:
+      locations = device_json["kismet.device.base.location_cloud"]
+    else:
+      locations = None
+      
     if type(locations) is dict:
       maxdBm = -1000
       for loc in locations["kis.gps.rrd.samples_100"]:
