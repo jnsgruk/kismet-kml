@@ -81,7 +81,7 @@ class KMLGen():
                     "Latitude": loc["kismet.historic.location.lat"],
                     "Longitude": loc["kismet.historic.location.lon"],
                     "dBm": loc["kismet.historic.location.signal"],
-                    "Time": loc["kismet.historic.location.time_sec"]
+                    "Time": str(datetime.fromtimestamp(loc["kismet.historic.location.time_sec"]))
                 }
                 fields["Locations"].append(outputLoc)
                 if outputLoc["dBm"] > maxdBm:
