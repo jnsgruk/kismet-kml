@@ -134,7 +134,11 @@ class KMLGen():
     fields.update(self.getLocationData(device_json))
       
     # Populate the SSID field
-    fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
+    try:
+      fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
+    except:
+      fields["SSID"] = ""
+
 
     # Populate an array of client objects
     row_clients = device_json["dot11.device"]["dot11.device.associated_client_map"]
