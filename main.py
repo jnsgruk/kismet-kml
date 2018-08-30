@@ -182,15 +182,12 @@ class KMLGen():
         return fields
 
     def getCommonExtendedData(self, object, point):
-        point.extendeddata.newdata(
-            name="Device MAC", value=escape(object["Device MAC"]))
-        point.extendeddata.newdata(name="Type", value=escape(object["Type"]))
-        point.extendeddata.newdata(
-            name="First Seen", value=escape(object["First Seen"]))
-        point.extendeddata.newdata(
-            name="Last Seen", value=escape(object["Last Seen"]))
-        point.extendeddata.newdata(
-            name="Channel", value=escape(object["Channel"]))
+        ed = point.extendeddata
+        ed.newdata(name="Device MAC", value=escape(object["Device MAC"]))
+        ed.newdata(name="Type", value=escape(object["Type"]))
+        ed.newdata(name="First Seen", value=escape(object["First Seen"]))
+        ed.newdata(name="Last Seen", value=escape(object["Last Seen"]))
+        ed.newdata(name="Channel", value=escape(object["Channel"]))
         return point
 
     def getPlacemark(self, folder, object, style):
@@ -200,114 +197,111 @@ class KMLGen():
         return point
 
     def createKML(self):
-        try:
-            kml = simplekml.Kml()
+        kml = simplekml.Kml()
 
-            kmlClients = kml.newfolder(name="Clients")
-            kmlAPs = kml.newfolder(name="APs")
-            kmlBridged = kml.newfolder(name="Bridged")
-            kmlOther = kml.newfolder(name="Other")
+        kmlClients = kml.newfolder(name="Clients")
+        kmlAPs = kml.newfolder(name="APs")
+        kmlBridged = kml.newfolder(name="Bridged")
+        kmlOther = kml.newfolder(name="Other")
 
-            circleUrl = "http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"
+        circleUrl = "http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png"
 
-            blueCircle = simplekml.Style()
-            blueCircle.iconstyle.icon.href = circleUrl
-            blueCircle.iconstyle.color = simplekml.Color.blue
+        blueCircle = simplekml.Style()
+        blueCircle.iconstyle.icon.href = circleUrl
+        blueCircle.iconstyle.color = simplekml.Color.blue
 
-            amberCircle = simplekml.Style()
-            amberCircle.iconstyle.icon.href = circleUrl
-            amberCircle.iconstyle.color = simplekml.Color.orange
+        amberCircle = simplekml.Style()
+        amberCircle.iconstyle.icon.href = circleUrl
+        amberCircle.iconstyle.color = simplekml.Color.orange
 
-            greenCircle = simplekml.Style()
-            greenCircle.iconstyle.icon.href = circleUrl
-            greenCircle.iconstyle.color = simplekml.Color.green
+        greenCircle = simplekml.Style()
+        greenCircle.iconstyle.icon.href = circleUrl
+        greenCircle.iconstyle.color = simplekml.Color.green
 
-            redCircle = simplekml.Style()
-            redCircle.iconstyle.icon.href = circleUrl
-            redCircle.iconstyle.color = simplekml.Color.red
+        redCircle = simplekml.Style()
+        redCircle.iconstyle.icon.href = circleUrl
+        redCircle.iconstyle.color = simplekml.Color.red
 
-            for client in self.clients:
-                if client["Locations"]:
-                    pm = self.getPlacemark(kmlClients, client, blueCircle)
-                    pm = self.getCommonExtendedData(client, pm)
+        for client in self.clients:
+            if client["Locations"]:
+                pm = self.getPlacemark(kmlClients, client, blueCircle)
+                pm = self.getCommonExtendedData(client, pm)
+                ed = pm.extendeddata
 
-                    for probe in client["Probes"]:
-                        pm.extendeddata.newdata(
-                            name="Probed SSID", value=escape(probe["SSID"]))
+                for probe in client["Probes"]:
+                    ed.newdata(name="Probed SSID",
+                               value=escape(probe["SSID"]))
 
-                    for i, ap in enumerate(client["APs"]):
-                        clist = list(
-                            filter(lambda x: x["Key"] == ap["Key"], self.aps))
-                        if len(clist) > 0:
-                            ssid = clist[0]["SSID"]
-                            pm.extendeddata.newdata(
-                                name="AP " + str(i) + " SSID", value=escape(ssid))
-                            pm.extendeddata.newdata(
-                                name="AP " + str(i) + " BSSID", value=escape(ap["BSSID"]))
+                for i, ap in enumerate(client["APs"]):
+                    clist = list(
+                        filter(lambda x: x["Key"] == ap["Key"], self.aps))
+                    if len(clist) > 0:
+                        ssid = clist[0]["SSID"]
+                        name = "AP " + str(i) + " SSID"
+                        ed.newdata(name=name, value=escape(ssid))
+                        name = "AP " + str(i) + " BSSID"
+                        ed.newdata(name=name, value=escape(ap["BSSID"]))
 
-            for ap in self.aps:
-                if ap["Locations"]:
-                    pm = self.getPlacemark(kmlAPs, ap, greenCircle)
-                    pm = self.getCommonExtendedData(ap, pm)
+        for ap in self.aps:
+            if ap["Locations"]:
+                pm = self.getPlacemark(kmlAPs, ap, greenCircle)
+                pm = self.getCommonExtendedData(ap, pm)
+                ed = pm.extendeddata
 
-                    pm.extendeddata.newdata(
-                        name="SSID", value=escape(ap["SSID"]))
+                ed.newdata(name="SSID", value=escape(ap["SSID"]))
 
-                    for client in ap["Clients"]:
-                        pm.extendeddata.newdata(
-                            name="Client Device MAC", value=escape(client["Device MAC"]))
+                for c in ap["Clients"]:
+                    ed.newdata(name="Client Device MAC",
+                               value=escape(c["Device MAC"]))
 
-            for other in self.other:
-                if other["Locations"]:
-                    folder = kmlClients if other["APs"] else kmlOther
-                    style = blueCircle if other["APs"] else redCircle
+        for other in self.other:
+            if other["Locations"]:
+                folder = kmlClients if other["APs"] else kmlOther
+                style = blueCircle if other["APs"] else redCircle
 
-                    pm = self.getPlacemark(folder, other, style)
-                    pm = self.getCommonExtendedData(other, pm)
+                pm = self.getPlacemark(folder, other, style)
+                pm = self.getCommonExtendedData(other, pm)
+                ed = pm.extendeddata
 
-                    for probe in other["Probes"]:
-                        pm.extendeddata.newdata(
-                            name="Probed SSID", value=escape(probe["SSID"]))
+                for probe in other["Probes"]:
+                    ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
 
-                    for i, ap in enumerate(other["APs"]):
-                        olist = list(
-                            filter(lambda x: x["Key"] == ap["Key"], self.aps))
-                        if len(olist) > 0:
-                            ssid = olist[0]["SSID"]
-                            pm.extendeddata.newdata(
-                                name="AP " + str(i) + " SSID", value=escape(ssid))
+                for i, ap in enumerate(other["APs"]):
+                    olist = list(
+                        filter(lambda x: x["Key"] == ap["Key"], self.aps))
+                    if len(olist) > 0:
+                        ssid = olist[0]["SSID"]
+                        name = "AP " + str(i) + " SSID"
+                        ed.newdata(name=name, value=escape(ssid))
 
-                        pm.extendeddata.newdata(
-                            name="AP " + str(i) + " BSSID", value=escape(ap["BSSID"]))
+                    name = "AP " + str(i) + " BSSID"
+                    ed.newdata(name=name, value=escape(ap["BSSID"]))
 
-            for bridged in self.bridged:
-                if bridged["Locations"]:
-                    folder = kmlClients if bridged["APs"] else kmlBridged
-                    style = blueCircle if bridged["APs"] else amberCircle
+        for bridged in self.bridged:
+            if bridged["Locations"]:
+                folder = kmlClients if bridged["APs"] else kmlBridged
+                style = blueCircle if bridged["APs"] else amberCircle
 
-                    pm = self.getPlacemark(folder, bridged, style)
-                    pm = self.getCommonExtendedData(bridged, pm)
+                pm = self.getPlacemark(folder, bridged, style)
+                pm = self.getCommonExtendedData(bridged, pm)
+                ed = pm.extendeddata
 
-                    for probe in bridged["Probes"]:
-                        pm.extendeddata.newdata(
-                            name="Probed SSID", value=escape(probe["SSID"]))
+                for probe in bridged["Probes"]:
+                    ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
 
-                    for i, ap in enumerate(bridged["APs"]):
-                        blist = list(
-                            filter(lambda x: x["Key"] == ap["Key"], self.aps))
-                        if len(blist) > 0:
-                            ssid = blist[0]["SSID"]
-                            pm.extendeddata.newdata(
-                                name="AP " + str(i) + " SSID", value=escape(ssid))
+                for i, ap in enumerate(bridged["APs"]):
+                    blist = list(
+                        filter(lambda x: x["Key"] == ap["Key"], self.aps))
+                    if len(blist) > 0:
+                        ssid = blist[0]["SSID"]
+                        name = "AP " + str(i) + " SSID"
+                        ed.newdata(name=name, value=escape(ssid))
 
-                        pm.extendeddata.newdata(
-                            name="AP " + str(i) + " BSSID", value=escape(ap["BSSID"]))
+                    name = "AP " + str(i) + " BSSID"
+                    ed.newdata(name=name, value=escape(ap["BSSID"]))
 
-            kml.save(self.outputFile)
+        kml.save(self.outputFile)
 
-        except TypeError as e:
-            print(e)
-            print("createKML: No data to export!")
 
 
 # Set up command line arguments
