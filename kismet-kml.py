@@ -8,9 +8,10 @@ from xml.sax.saxutils import escape
 
 class KMLGen():
 
-    def __init__(self, filename, printjson):
+    def __init__(self, filename, printjson, inplace):
         self.inputFile = filename
-        basename = filename.split(".")[-2].split("/")[-1]
+        basename = filename.split(
+            ".")[-2] if inplace else filename.split(".")[-2].split("/")[-1]
         self.outputFile = basename + ".kml"
         self.jsonFile = basename + ".json"
         # Initialize variables
@@ -310,14 +311,16 @@ class KMLGen():
 
 # Set up command line arguments
 parser = argparse.ArgumentParser(
-    description="Generates a KML file and a JSON file from the output file of Kismet (2018 Development Version")
+    description="Generates a KML file and a JSON file from the output file of Kismet (2018 Development Version).")
 
 parser.add_argument('filename', metavar='Kismet File', type=str,
                     help="Path to Kismet file (*.kismet).")
 parser.add_argument('--print', '-p', required=False,
                     action='store_true', help='Print resulting JSON to stdout.')
+parser.add_argument('--inplace', '-i', required=False,
+                    action='store_true', help='Save output files in same directory as input file. Default is to output to current working directory')
 
 args = parser.parse_args()
 
 
-kmlGen = KMLGen(args.filename, args.print)
+kmlGen = KMLGen(args.filename, args.print, args.inplace)
