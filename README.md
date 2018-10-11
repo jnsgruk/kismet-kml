@@ -7,7 +7,7 @@ To install dependencies, run the following:
 ```
 $ git clone https://github.com/jnsgruk/kismet-kml
 $ cd kismet-kml/
-$ pip install -r requirements.txt
+$ pip3 install -r requirements.txt
 ```
 
 You're now ready to parse Kismet files like so:
