@@ -8,10 +8,11 @@ from xml.sax.saxutils import escape
 
 class KMLGen():
 
-    def __init__(self, inputFile, outputFile, jsonFile):
-        self.inputFile = inputFile
-        self.outputFile = outputFile
-        self.jsonFile = jsonFile
+    def __init__(self, filename, printjson):
+        self.inputFile = filename
+        basename = filename.split(".")[-2].split("/")[-1]
+        self.outputFile = basename + ".kml"
+        self.jsonFile = basename + ".json"
         # Initialize variables
         self.rows = []
         self.clients = []
@@ -27,16 +28,20 @@ class KMLGen():
         #  Take the parsed data and generate a KML
         self.createKML()
 
-        # Write the sorted data into a nicely formatted JSON file
-        output = open(self.jsonFile, "w")
-        output.write(json.dumps({
+        jsonData = json.dumps({
             "clients": self.clients,
             "aps": self.aps,
             "bridged": self.bridged,
             "other": self.other,
             "probes": list(self.probes)
-        }, indent=2))
+        }, indent=2)
+        # Write the sorted data into a nicely formatted JSON file
+        output = open(self.jsonFile, "w")
+        output.write(jsonData)
         output.close()
+
+        if printjson:
+            print(jsonData)
 
     # Connects to the Kismet database file and pulls the rows from the devices table
     def getData(self):
@@ -105,7 +110,7 @@ class KMLGen():
         fields["Key"] = device_json["kismet.device.base.key"]
         return fields
 
-    # For a given client, find any APs it's associated with
+    # For a given client, find any APs it's associateprint(file.split(".")[-1])d with
     def getClientAPs(self, device_json):
         fields = {}
         clientMap = device_json["dot11.device"]["dot11.device.client_map"]
@@ -303,18 +308,16 @@ class KMLGen():
         kml.save(self.outputFile)
 
 
-
 # Set up command line arguments
 parser = argparse.ArgumentParser(
-    description="Generates a KML file from the output file of Kismet (2017 Development Version")
+    description="Generates a KML file and a JSON file from the output file of Kismet (2018 Development Version")
 
-parser.add_argument('--input-file', '-i', required=True, type=str,
-                    help="Path to Kismet file. Usually a *.kismet file.")
-parser.add_argument('--output-kml-file', '-k', required=True,
-                    type=str, help="Path to desired KML output file")
-parser.add_argument('--output-json-file', '-j', required=True,
-                    type=str, help="Path to desired JSON output file")
+parser.add_argument('filename', metavar='Kismet File', type=str,
+                    help="Path to Kismet file (*.kismet).")
+parser.add_argument('--print', '-p', required=False,
+                    action='store_true', help='Print resulting JSON to stdout.')
+
 args = parser.parse_args()
 
-# Create a new instance of the Wigle class
-kmlGen = KMLGen(args.input_file, args.output_kml_file, args.output_json_file)
+
+kmlGen = KMLGen(args.filename, args.print)
