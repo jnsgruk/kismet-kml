@@ -139,7 +139,7 @@ class KMLGen():
     #  Parse an AP object, creating necesarry common keys, and populate with client macs/uuids
     def parseAP(self, row):
         fields = {}
-        device_json = json.loads(row["device"])
+        device_json = json.loads(row["device"].decode("utf-8"))
         # Get common fields and location data
         fields.update(self.getCommonFields(row, device_json))
         fields.update(self.getLocationData(device_json))
@@ -171,7 +171,7 @@ class KMLGen():
 
     def parseClient(self, row):
         fields = {}
-        device_json = json.loads(row["device"])
+        device_json = json.loads(row["device"].decode("utf-8"))
         fields.update(self.getCommonFields(row, device_json))
         fields.update(self.getLocationData(device_json))
         fields.update(self.getClientAPs(device_json))
@@ -180,7 +180,7 @@ class KMLGen():
 
     def parseOther(self, row):
         fields = {}
-        device_json = json.loads(row["device"])
+        device_json = json.loads(row["device"].decode("utf-8"))
         fields.update(self.getCommonFields(row, device_json))
         fields.update(self.getLocationData(device_json))
         fields.update(self.getClientAPs(device_json))
