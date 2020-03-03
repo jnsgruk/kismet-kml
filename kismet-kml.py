@@ -1,9 +1,10 @@
-import sqlite3
 import argparse
-from datetime import datetime
 import json
-import simplekml
+import sqlite3
+from datetime import datetime
 from xml.sax.saxutils import escape
+
+import simplekml
 
 
 class KMLGen():
@@ -130,8 +131,8 @@ class KMLGen():
         fields["Probes"] = []
         row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
         for probe in row_probes:
-            if row_probes[probe]["dot11.probedssid.ssid"]:
-                ssid = row_probes[probe]["dot11.probedssid.ssid"]
+            if probe["dot11.probedssid.ssid"]:
+                ssid = probe["dot11.probedssid.ssid"]
                 fields["Probes"].append({"SSID": ssid})
                 self.probes.add(ssid)
         return fields
@@ -139,14 +140,14 @@ class KMLGen():
     #  Parse an AP object, creating necesarry common keys, and populate with client macs/uuids
     def parseAP(self, row):
         fields = {}
-        device_json = json.loads(row["device"].decode("utf-8"))
+        device_json = json.loads(row["device"])
         # Get common fields and location data
         fields.update(self.getCommonFields(row, device_json))
         fields.update(self.getLocationData(device_json))
 
         # Populate the SSID field
         try:
-            fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid"]
+            fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid_record"]["dot11.advertisedssid.beacon_info"]
         except:
             fields["SSID"] = ""
 
@@ -171,7 +172,7 @@ class KMLGen():
 
     def parseClient(self, row):
         fields = {}
-        device_json = json.loads(row["device"].decode("utf-8"))
+        device_json = json.loads(row["device"])
         fields.update(self.getCommonFields(row, device_json))
         fields.update(self.getLocationData(device_json))
         fields.update(self.getClientAPs(device_json))
@@ -180,7 +181,7 @@ class KMLGen():
 
     def parseOther(self, row):
         fields = {}
-        device_json = json.loads(row["device"].decode("utf-8"))
+        device_json = json.loads(row["device"])
         fields.update(self.getCommonFields(row, device_json))
         fields.update(self.getLocationData(device_json))
         fields.update(self.getClientAPs(device_json))
