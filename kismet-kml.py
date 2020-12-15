@@ -7,12 +7,14 @@ from xml.sax.saxutils import escape
 import simplekml
 
 
-class KMLGen():
-
+class KMLGen:
     def __init__(self, filename, printjson, inplace):
         self.inputFile = filename
-        basename = filename.split(
-            ".")[-2] if inplace else filename.split(".")[-2].split("/")[-1]
+        basename = (
+            filename.split(".")[-2]
+            if inplace
+            else filename.split(".")[-2].split("/")[-1]
+        )
         self.outputFile = basename + ".kml"
         self.jsonFile = basename + ".json"
         # Initialize variables
@@ -30,13 +32,16 @@ class KMLGen():
         #  Take the parsed data and generate a KML
         self.createKML()
 
-        jsonData = json.dumps({
-            "clients": self.clients,
-            "aps": self.aps,
-            "bridged": self.bridged,
-            "other": self.other,
-            "probes": list(self.probes)
-        }, indent=2)
+        jsonData = json.dumps(
+            {
+                "clients": self.clients,
+                "aps": self.aps,
+                "bridged": self.bridged,
+                "other": self.other,
+                "probes": list(self.probes),
+            },
+            indent=2,
+        )
         # Write the sorted data into a nicely formatted JSON file
         output = open(self.jsonFile, "w")
         output.write(jsonData)
@@ -57,13 +62,16 @@ class KMLGen():
     # Process the collected data
     def parseData(self):
         #  Filter the data into lists based on type
-        clients = list(
-            filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
+        clients = list(filter(lambda x: x["type"] == "Wi-Fi Client", self.rows))
         aps = list(filter(lambda x: x["type"] == "Wi-Fi AP", self.rows))
-        bridged = list(
-            filter(lambda x: x["type"] == "Wi-Fi Bridged", self.rows))
-        other = list(filter(lambda x: x["type"] not in [
-                     "Wi-Fi Client", "Wi-Fi AP", "Wi-Fi Bridged"], self.rows))
+        bridged = list(filter(lambda x: x["type"] == "Wi-Fi Bridged", self.rows))
+        other = list(
+            filter(
+                lambda x: x["type"]
+                not in ["Wi-Fi Client", "Wi-Fi AP", "Wi-Fi Bridged"],
+                self.rows,
+            )
+        )
 
         #  Parse every item, placing the result into an approriate list
         self.clients = list(map(lambda x: self.parseClient(x), clients))
@@ -71,31 +79,17 @@ class KMLGen():
         self.bridged = list(map(lambda x: self.parseOther(x), bridged))
         self.other = list(map(lambda x: self.parseOther(x), other))
 
-    #  Fetches every location a device was seen, and works out Lat/Lon based on position when
-    #  signal strength was highest
+    #  Fetches the location associated with the highest RSSI value for a device
     def getLocationData(self, device_json):
         fields = {}
-        fields["Locations"] = []
-        if "kismet.device.base.location_cloud" in device_json:
-            locations = device_json["kismet.device.base.location_cloud"]
-        else:
-            locations = None
-
-        if type(locations) is dict:
-            maxdBm = -1000
-            for loc in locations["kis.gps.rrd.samples_100"]:
-                outputLoc = {
-                    "Latitude": loc["kismet.historic.location.lat"],
-                    "Longitude": loc["kismet.historic.location.lon"],
-                    "dBm": loc["kismet.historic.location.signal"],
-                    "Time": str(datetime.fromtimestamp(loc["kismet.historic.location.time_sec"]))
-                }
-                fields["Locations"].append(outputLoc)
-                if outputLoc["dBm"] > maxdBm:
-                    fields["Latitude"] = outputLoc["Latitude"]
-                    fields["Longitude"] = outputLoc["Longitude"]
-                    maxdBm = outputLoc["dBm"]
-        else:
+        try:
+            peak_loc = device_json["kismet.device.base.signal"][
+                "kismet.common.signal.peak_loc"
+            ]
+            fields["Longitude"] = peak_loc["kismet.common.location.geopoint"][0]
+            fields["Latitude"] = peak_loc["kismet.common.location.geopoint"][1]
+            fields["FixMode"] = peak_loc["kismet.common.location.fix"]
+        except:
             fields["Latitude"] = 0
             fields["Longitude"] = 0
         return fields
@@ -115,26 +109,34 @@ class KMLGen():
     # For a given client, find any APs it's associateprint(file.split(".")[-1])d with
     def getClientAPs(self, device_json):
         fields = {}
-        clientMap = device_json["dot11.device"]["dot11.device.client_map"]
-        fields["APs"] = []
-        if clientMap:
-            for ap in clientMap:
-                fields["APs"].append({
-                    "Key": clientMap[ap]["dot11.client.bssid_key"],
-                    "BSSID": clientMap[ap]["dot11.client.bssid"]
-                })
+        try:
+            clientMap = device_json["dot11.device"]["dot11.device.client_map"]
+            fields["APs"] = []
+            if clientMap:
+                for ap in clientMap:
+                    fields["APs"].append(
+                        {
+                            "Key": clientMap[ap]["dot11.client.bssid_key"],
+                            "BSSID": clientMap[ap]["dot11.client.bssid"],
+                        }
+                    )
+        except KeyError:
+            pass
         return fields
 
     #  For a given device, find any probes it may have sent out
     def getProbes(self, device_json):
         fields = {}
         fields["Probes"] = []
-        row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
-        for probe in row_probes:
-            if probe["dot11.probedssid.ssid"]:
-                ssid = probe["dot11.probedssid.ssid"]
-                fields["Probes"].append({"SSID": ssid})
-                self.probes.add(ssid)
+        try:
+            row_probes = device_json["dot11.device"]["dot11.device.probed_ssid_map"]
+            for probe in row_probes:
+                if probe["dot11.probedssid.ssid"]:
+                    ssid = probe["dot11.probedssid.ssid"]
+                    fields["Probes"].append({"SSID": ssid})
+                    self.probes.add(ssid)
+        except KeyError:
+            pass
         return fields
 
     #  Parse an AP object, creating necesarry common keys, and populate with client macs/uuids
@@ -147,27 +149,38 @@ class KMLGen():
 
         # Populate the SSID field
         try:
-            fields["SSID"] = device_json["dot11.device"]["dot11.device.last_beaconed_ssid_record"]["dot11.advertisedssid.beacon_info"]
+            fields["SSID"] = device_json["dot11.device"][
+                "dot11.device.last_beaconed_ssid_record"
+            ]["dot11.advertisedssid.beacon_info"]
         except:
             fields["SSID"] = ""
 
-        # Populate an array of client objects
-        row_clients = device_json["dot11.device"]["dot11.device.associated_client_map"]
-        fields["Clients"] = [{k: v} for k, v in row_clients.items()]
+        try:
+            # Populate an array of client objects
+            row_clients = device_json["dot11.device"][
+                "dot11.device.associated_client_map"
+            ]
+            fields["Clients"] = [{k: v} for k, v in row_clients.items()]
 
-        # Iterate over the clients, adding their MACs and UUIDs
-        for i, client in enumerate(fields["Clients"]):
-            key = list(client.values())[0]
-            # Filter the client list to get all clients matching the Key
-            matched = list(filter(lambda c: key == c["Key"], self.clients))
-            if len(matched) > 0:
-                # fields["Clients"][i] = matched[0]
-                matchedClient = matched[0]
-                fields["Clients"][i] = {
-                    "Key": key, "Device MAC": matchedClient["Device MAC"]}
-            else:
-                fields["Clients"][i] = {"Key": key,
-                                        "Device MAC": list(client.keys())[0]}
+            # Iterate over the clients, adding their MACs and UUIDs
+            for i, client in enumerate(fields["Clients"]):
+                key = list(client.values())[0]
+                # Filter the client list to get all clients matching the Key
+                matched = list(filter(lambda c: key == c["Key"], self.clients))
+                if len(matched) > 0:
+                    # fields["Clients"][i] = matched[0]
+                    matchedClient = matched[0]
+                    fields["Clients"][i] = {
+                        "Key": key,
+                        "Device MAC": matchedClient["Device MAC"],
+                    }
+                else:
+                    fields["Clients"][i] = {
+                        "Key": key,
+                        "Device MAC": list(client.keys())[0],
+                    }
+        except KeyError:
+            pass
         return fields
 
     def parseClient(self, row):
@@ -198,8 +211,10 @@ class KMLGen():
         return point
 
     def getPlacemark(self, folder, object, style):
-        point = folder.newpoint(name=escape(object["Common Name"]), coords=[
-                                (object["Longitude"], object["Latitude"])])
+        point = folder.newpoint(
+            name=escape(object["Common Name"]),
+            coords=[(object["Longitude"], object["Latitude"])],
+        )
         point.style = style
         return point
 
@@ -230,96 +245,116 @@ class KMLGen():
         redCircle.iconstyle.color = simplekml.Color.red
 
         for client in self.clients:
-            if client["Locations"]:
-                pm = self.getPlacemark(kmlClients, client, blueCircle)
-                pm = self.getCommonExtendedData(client, pm)
-                ed = pm.extendeddata
+            if "FixMode" in client and client["FixMode"] > 1:
+                try:
+                    pm = self.getPlacemark(kmlClients, client, blueCircle)
+                    pm = self.getCommonExtendedData(client, pm)
+                    ed = pm.extendeddata
 
-                for probe in client["Probes"]:
-                    ed.newdata(name="Probed SSID",
-                               value=escape(probe["SSID"]))
+                    for probe in client["Probes"]:
+                        ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
 
-                for i, ap in enumerate(client["APs"]):
-                    clist = list(
-                        filter(lambda x: x["Key"] == ap["Key"], self.aps))
-                    if len(clist) > 0:
-                        ssid = clist[0]["SSID"]
-                        name = "AP " + str(i) + " SSID"
-                        ed.newdata(name=name, value=escape(ssid))
-                        name = "AP " + str(i) + " BSSID"
-                        ed.newdata(name=name, value=escape(ap["BSSID"]))
+                    for i, ap in enumerate(client["APs"]):
+                        clist = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))
+                        if len(clist) > 0:
+                            ssid = clist[0]["SSID"]
+                            name = "AP " + str(i) + " SSID"
+                            ed.newdata(name=name, value=escape(ssid))
+                            name = "AP " + str(i) + " BSSID"
+                            ed.newdata(name=name, value=escape(ap["BSSID"]))
+                except KeyError:
+                    pass
 
         for ap in self.aps:
-            if ap["Locations"]:
-                pm = self.getPlacemark(kmlAPs, ap, greenCircle)
-                pm = self.getCommonExtendedData(ap, pm)
-                ed = pm.extendeddata
+            if "FixMode" in ap and ap["FixMode"] > 1:
+                try:
+                    pm = self.getPlacemark(kmlAPs, ap, greenCircle)
+                    pm = self.getCommonExtendedData(ap, pm)
+                    ed = pm.extendeddata
 
-                ed.newdata(name="SSID", value=escape(ap["SSID"]))
-
-                for c in ap["Clients"]:
-                    ed.newdata(name="Client Device MAC",
-                               value=escape(c["Device MAC"]))
+                    ed.newdata(name="SSID", value=escape(ap["SSID"]))
+                    for c in ap["Clients"]:
+                        ed.newdata(
+                            name="Client Device MAC", value=escape(c["Device MAC"])
+                        )
+                except KeyError:
+                    pass
 
         for other in self.other:
-            if other["Locations"]:
-                folder = kmlClients if other["APs"] else kmlOther
-                style = blueCircle if other["APs"] else redCircle
+            if "FixMode" in other and other["FixMode"] > 1:
+                try:
+                    folder = kmlClients if other["APs"] else kmlOther
+                    style = blueCircle if other["APs"] else redCircle
 
-                pm = self.getPlacemark(folder, other, style)
-                pm = self.getCommonExtendedData(other, pm)
-                ed = pm.extendeddata
+                    pm = self.getPlacemark(folder, other, style)
+                    pm = self.getCommonExtendedData(other, pm)
+                    ed = pm.extendeddata
 
-                for probe in other["Probes"]:
-                    ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
+                    for probe in other["Probes"]:
+                        ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
 
-                for i, ap in enumerate(other["APs"]):
-                    olist = list(
-                        filter(lambda x: x["Key"] == ap["Key"], self.aps))
-                    if len(olist) > 0:
-                        ssid = olist[0]["SSID"]
-                        name = "AP " + str(i) + " SSID"
-                        ed.newdata(name=name, value=escape(ssid))
+                    for i, ap in enumerate(other["APs"]):
+                        olist = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))
+                        if len(olist) > 0:
+                            ssid = olist[0]["SSID"]
+                            name = "AP " + str(i) + " SSID"
+                            ed.newdata(name=name, value=escape(ssid))
 
-                    name = "AP " + str(i) + " BSSID"
-                    ed.newdata(name=name, value=escape(ap["BSSID"]))
+                        name = "AP " + str(i) + " BSSID"
+                        ed.newdata(name=name, value=escape(ap["BSSID"]))
+                except KeyError:
+                    pass
 
         for bridged in self.bridged:
-            if bridged["Locations"]:
-                folder = kmlClients if bridged["APs"] else kmlBridged
-                style = blueCircle if bridged["APs"] else amberCircle
+            if "FixMode" in bridged and bridged["FixMode"] > 1:
+                try:
+                    folder = kmlClients if bridged["APs"] else kmlBridged
+                    style = blueCircle if bridged["APs"] else amberCircle
 
-                pm = self.getPlacemark(folder, bridged, style)
-                pm = self.getCommonExtendedData(bridged, pm)
-                ed = pm.extendeddata
+                    pm = self.getPlacemark(folder, bridged, style)
+                    pm = self.getCommonExtendedData(bridged, pm)
+                    ed = pm.extendeddata
 
-                for probe in bridged["Probes"]:
-                    ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
+                    for probe in bridged["Probes"]:
+                        ed.newdata(name="Probed SSID", value=escape(probe["SSID"]))
 
-                for i, ap in enumerate(bridged["APs"]):
-                    blist = list(
-                        filter(lambda x: x["Key"] == ap["Key"], self.aps))
-                    if len(blist) > 0:
-                        ssid = blist[0]["SSID"]
-                        name = "AP " + str(i) + " SSID"
-                        ed.newdata(name=name, value=escape(ssid))
+                    for i, ap in enumerate(bridged["APs"]):
+                        blist = list(filter(lambda x: x["Key"] == ap["Key"], self.aps))
+                        if len(blist) > 0:
+                            ssid = blist[0]["SSID"]
+                            name = "AP " + str(i) + " SSID"
+                            ed.newdata(name=name, value=escape(ssid))
 
-                    name = "AP " + str(i) + " BSSID"
-                    ed.newdata(name=name, value=escape(ap["BSSID"]))
+                        name = "AP " + str(i) + " BSSID"
+                        ed.newdata(name=name, value=escape(ap["BSSID"]))
+                except KeyError:
+                    pass
 
         kml.save(self.outputFile)
 
 
 # Set up command line arguments
 parser = argparse.ArgumentParser(
-    description="Generates a KML file and a JSON file from the output file of Kismet (2018 Development Version).")
+    description="Generates a KML file and a JSON file from the output file of Kismet (2018 Development Version)."
+)
 
-parser.add_argument('filename', metavar='Kismet File', type=str,
-                    help="Path to Kismet file (*.kismet).")
-parser.add_argument('--print', '-p', required=False,
-                    action='store_true', help='Print resulting JSON to stdout.')
-parser.add_argument('--inplace', '-i', required=False,
-                    action='store_true', help='Save output files in same directory as input file. Default is to output to current working directory')
+parser.add_argument(
+    "filename", metavar="Kismet File", type=str, help="Path to Kismet file (*.kismet)."
+)
+parser.add_argument(
+    "--print",
+    "-p",
+    required=False,
+    action="store_true",
+    help="Print resulting JSON to stdout.",
+)
+parser.add_argument(
+    "--inplace",
+    "-i",
+    required=False,
+    action="store_true",
+    help="Save output files in same directory as input file. Default is to output to current working directory",
+)
 
 args = parser.parse_args()
 
