@@ -92,6 +92,7 @@ class KMLGen:
         except:
             fields["Latitude"] = 0
             fields["Longitude"] = 0
+            fields["FixMode"] = 0
         return fields
 
     # Returns all the fields common to every device type
@@ -121,7 +122,7 @@ class KMLGen:
                         }
                     )
         except KeyError:
-            pass
+            fields["APs"] = []
         return fields
 
     #  For a given device, find any probes it may have sent out
@@ -150,8 +151,8 @@ class KMLGen:
         # Populate the SSID field
         try:
             fields["SSID"] = device_json["dot11.device"][
-                "dot11.device.last_beaconed_ssid_record"
-            ]["dot11.advertisedssid.beacon_info"]
+                "dot11.device.advertised_ssid_map"
+            ][0]["dot11.advertisedssid.ssid"]
         except:
             fields["SSID"] = ""
 
@@ -180,7 +181,7 @@ class KMLGen:
                         "Device MAC": list(client.keys())[0],
                     }
         except KeyError:
-            pass
+            fields["Clients"] = []
         return fields
 
     def parseClient(self, row):
